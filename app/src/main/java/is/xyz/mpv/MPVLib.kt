@@ -27,6 +27,15 @@ object MPVLib {
 
     external fun grabThumbnail(dimension: Int): Bitmap?
 
+    @Throws(InterruptedException::class)
+    external fun extractThumbnail(
+        source: String,
+        timestampMs: Long,
+        maxWidth: Int,
+        maxHeight: Int,
+        timeoutMs: Long,
+    ): Bitmap?
+
     external fun getPropertyInt(property: String): Int?
     external fun setPropertyInt(property: String, value: Int)
     external fun getPropertyDouble(property: String): Double?

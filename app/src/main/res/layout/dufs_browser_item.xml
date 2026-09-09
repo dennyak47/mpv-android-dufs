@@ -31,13 +31,29 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp">
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/icon"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+        <FrameLayout
+            android:layout_width="96dp"
+            android:layout_height="54dp"
             android:layout_marginEnd="16dp"
-            android:contentDescription="@null"
-            app:tint="?android:attr/textColorPrimary" />
+            android:foregroundGravity="center">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/thumbnail"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/icon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                app:tint="?android:attr/textColorPrimary" />
+
+        </FrameLayout>
 
         <TextView
             android:id="@+id/name"

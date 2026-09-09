@@ -24,10 +24,11 @@ import java.util.concurrent.Future
 
 class DufsBrowserActivity : AppCompatActivity() {
     private lateinit var binding: ActivityDufsBrowserBinding
+    private lateinit var thumbnailManager: ThumbnailManager
+    private lateinit var adapter: BrowserAdapter
     private val executor = Executors.newSingleThreadExecutor()
     private var loadTask: Future<*>? = null
     private val servers = mutableListOf<String>()
-    private val adapter = BrowserAdapter(::onRowClicked, ::confirmRemoveServer)
 
     private var rootUrl: String? = null
     private var directoryUrl: String? = null
@@ -38,6 +39,8 @@ class DufsBrowserActivity : AppCompatActivity() {
         binding = ActivityDufsBrowserBinding.inflate(layoutInflater)
         setContentView(binding.root)
         Utils.handleInsetsAsPadding(binding.root)
+        thumbnailManager = ThumbnailManager(applicationContext)
+        adapter = BrowserAdapter(thumbnailManager, ::onRowClicked, ::confirmRemoveServer)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.list.layoutManager = LinearLayoutManager(this)
@@ -211,7 +214,15 @@ class DufsBrowserActivity : AppCompatActivity() {
                     binding.empty.isVisible = entries.isEmpty()
                     binding.empty.setText(R.string.dufs_empty_folder)
                     adapter.submit(entries.map {
-                        Row(it.name, it.url, it.isDirectory, false)
+                        Row(
+                            it.name,
+                            it.url,
+                            it.isDirectory,
+                            false,
+                            it.size,
+                            it.modifiedTime,
+                            it.isVideo,
+                        )
                     })
                 }
             } catch (_: InterruptedException) {
@@ -286,6 +297,10 @@ class DufsBrowserActivity : AppCompatActivity() {
     override fun onDestroy() {
         loadTask?.cancel(true)
         executor.shutdownNow()
+        if (this::binding.isInitialized)
+            binding.list.adapter = null
+        if (this::thumbnailManager.isInitialized)
+            thumbnailManager.close()
         super.onDestroy()
     }
 
@@ -294,9 +309,13 @@ class DufsBrowserActivity : AppCompatActivity() {
         val url: String,
         val isDirectory: Boolean,
         val isServer: Boolean,
+        val size: Long = -1L,
+        val modifiedTime: Long = -1L,
+        val isVideo: Boolean = false,
     )
 
     private class BrowserAdapter(
+        private val thumbnailManager: ThumbnailManager,
         private val onClick: (Row) -> Unit,
         private val onRemove: (String) -> Unit,
     ) : RecyclerView.Adapter<BrowserAdapter.Holder>() {
@@ -342,11 +361,18 @@ class DufsBrowserActivity : AppCompatActivity() {
             holder.bind(rows[position], position == revealedPosition)
         }
 
+        override fun onViewRecycled(holder: Holder) {
+            holder.recycle()
+        }
+
         override fun getItemCount() = rows.size
 
         inner class Holder(
             private val binding: DufsBrowserItemBinding,
         ) : RecyclerView.ViewHolder(binding.root) {
+            private var thumbnailRequest: ThumbnailManager.Request? = null
+            private var boundUrl: String? = null
+
             val actionWidth: Float
                 get() = 96 * binding.root.resources.displayMetrics.density
 
@@ -355,12 +381,30 @@ class DufsBrowserActivity : AppCompatActivity() {
             }
 
             fun bind(row: Row, removeRevealed: Boolean) {
+                recycle()
+                boundUrl = row.url
                 binding.name.text = row.label
                 binding.icon.setImageResource(when {
                     row.isServer -> R.drawable.ic_dufs_48dp
                     row.isDirectory -> R.drawable.ic_folder_white_48dp
                     else -> R.drawable.ic_file_open_48dp
                 })
+                binding.icon.isVisible = true
+                binding.thumbnail.isVisible = false
+                binding.thumbnail.setImageDrawable(null)
+                if (row.isVideo) {
+                    thumbnailRequest = thumbnailManager.load(
+                        row.url,
+                        row.size,
+                        row.modifiedTime,
+                    ) { bitmap ->
+                        if (boundUrl != row.url || bitmap == null)
+                            return@load
+                        binding.thumbnail.setImageBitmap(bitmap)
+                        binding.thumbnail.isVisible = true
+                        binding.icon.isVisible = false
+                    }
+                }
                 binding.removeBtn.isVisible = row.isServer
                 setSwipeOffset(if (removeRevealed) actionWidth else 0f)
                 binding.foreground.setOnClickListener {
@@ -374,6 +418,14 @@ class DufsBrowserActivity : AppCompatActivity() {
                     hideRemove()
                     onRemove(row.url)
                 }
+            }
+
+            fun recycle() {
+                thumbnailRequest?.cancel()
+                thumbnailRequest = null
+                boundUrl = null
+                binding.thumbnail.setImageDrawable(null)
+                binding.thumbnail.isVisible = false
             }
         }
     }

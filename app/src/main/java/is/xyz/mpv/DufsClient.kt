@@ -15,6 +15,9 @@ internal object DufsClient {
         val name: String,
         val url: String,
         val isDirectory: Boolean,
+        val size: Long,
+        val modifiedTime: Long,
+        val isVideo: Boolean,
     )
 
     fun normalizeServerUrl(serverUrl: String): String {
@@ -39,13 +42,26 @@ internal object DufsClient {
             val name = item.getString("name")
             val type = item.getString("path_type")
             val child = directory.appendPath(name)
+            val size = item.optLong("size", -1L)
+            val modifiedTime = item.optLong("mtime", -1L)
 
             when (type) {
-                "Dir", "SymlinkDir" -> entries.add(Entry(name, child.toString(), true))
+                "Dir", "SymlinkDir" -> entries.add(
+                    Entry(name, child.toString(), true, size, modifiedTime, false)
+                )
                 "File", "SymlinkFile" -> {
                     val extension = name.substringAfterLast('.', "").lowercase()
                     if (extension in Utils.MEDIA_EXTENSIONS)
-                        entries.add(Entry(name, child.toString(), false))
+                        entries.add(
+                            Entry(
+                                name,
+                                child.toString(),
+                                false,
+                                size,
+                                modifiedTime,
+                                extension in Utils.VIDEO_EXTENSIONS,
+                            )
+                        )
                 }
             }
         }
