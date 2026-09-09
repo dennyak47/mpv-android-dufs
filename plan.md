@@ -19,9 +19,9 @@ mpv-android
  │   FFmpeg 抽帧
  │      │
  │      ▼
- │   缩放 + WebP
+ │   缩放为小尺寸 Bitmap
  │      │
- │      ├── 保存 Android 本地 cache
+ │      ├── Android 编码为 JPEG 并保存本地 cache
  │      │
  │      └── 可选：上传回 dufs
  │
@@ -34,9 +34,44 @@ mpv-android
 
 先做到：
 
-> dufs 视频 URL → FFmpeg → Bitmap/WebP → Android 缓存 → UI 显示
+> dufs 视频 URL → 现有 FFmpeg → 小尺寸 Bitmap → JPEG 缓存 → UI 显示
 
 跑通以后，再做远程 thumbnail 存储。
+
+## 已确认的项目现状
+
+当前项目已经打包并使用 FFmpeg，不需要额外下载或引入第二套 FFmpeg。
+
+构建脚本位于 `buildscripts/scripts/ffmpeg.sh`，当前固定版本为 FFmpeg `n9.0`。
+预编译库通过 `app/src/main/jni/Android.mk` 链接到现有 JNI 模块。
+
+已有原生库包括：
+
+```text
+libavformat
+libavcodec
+libavutil
+libswscale
+libswresample
+libavfilter
+```
+
+缩略图直接复用这些现有库：
+
+```text
+Kotlin
+   ↓ JNI
+现有 libavformat / libavcodec
+   ↓
+libswscale 直接缩放
+   ↓
+小尺寸 Android Bitmap
+   ↓
+Android Bitmap.compress(JPEG)
+```
+
+第一阶段不要求 WebP，也不新增 libwebp、Media3、ExoPlayer、OpenCV 或图片加载框架。
+第一阶段的 UI 集成范围只包括 `DufsBrowserActivity`，不修改本地文件选择器。
 
 ---
 
@@ -80,29 +115,31 @@ Produce a concise architecture report with exact file paths and relevant classes
 
 ---
 
-# Phase 1：确定 FFmpeg 接入点
+# Phase 1：确认现有 FFmpeg 的 JNI 接入细节
 
 第二步让 AI 专门研究：
 
 ```text
-FFmpeg 到底怎么进入 Android 层
+如何安全复用项目已有的 FFmpeg
 ```
 
 Prompt：
 
 ```text
-Based on the repository inspection, determine the safest way to implement video frame extraction using the FFmpeg already available in this mpv-android project.
+Based on the repository inspection, design the exact JNI integration for video frame extraction using the FFmpeg already bundled with this mpv-android project.
 
 Requirements:
 
 1. Prefer reusing the existing FFmpeg build/dependency.
 2. Do NOT introduce Media3, ExoPlayer, OpenCV, or another video decoder.
 3. Do NOT download or bundle a second FFmpeg.
-4. Determine whether frame extraction should be implemented:
-   - in native C/C++, or
-   - through an existing FFmpeg Java/Kotlin binding.
-5. Prefer a native implementation if that is consistent with the existing architecture.
-6. Define a minimal API between Android/Kotlin and native FFmpeg.
+4. Implement the extractor in native C/C++ through the existing JNI architecture.
+5. Use independent AVFormatContext and AVCodecContext instances; do not reuse or disturb the global playback mpv instance.
+6. Native code should decode and scale directly to the requested thumbnail size.
+7. Return only a small, final-size Android Bitmap; never return a full-resolution frame.
+8. Let Android encode the small Bitmap as JPEG when disk caching is needed.
+9. Define a minimal API between Android/Kotlin and native FFmpeg.
+10. Identify the exact Android.mk linkage changes needed for the already bundled avformat, avcodec, avutil, and swscale libraries.
 
 Do not implement yet.
 
@@ -115,7 +152,7 @@ Produce:
 - error handling strategy
 ```
 
-这里 AI 很可能会发现：
+已确定的目标架构：
 
 ```text
 Kotlin
@@ -126,7 +163,9 @@ libavformat
 libavcodec
 libswscale
    ↓
-WebP/JPEG
+小尺寸 Bitmap
+   ↓
+Android JPEG cache
 ```
 
 这就是我们想要的。
@@ -144,7 +183,7 @@ video URL/path
        ↓
 extractFrame()
        ↓
-JPEG/WebP bytes
+小尺寸 Bitmap
 ```
 
 让 AI：
@@ -161,12 +200,14 @@ Requirements:
 2. Input parameters:
    - video source
    - timestamp in milliseconds
-   - output width
-   - output height
+   - maximum output width
+   - maximum output height
 
 3. Output:
-   - encoded JPEG or WebP bytes
-   - do not return a full-resolution Bitmap from native code
+   - a final-size Android Bitmap
+   - scale in native code before creating the Bitmap
+   - preserve the source aspect ratio
+   - never return a full-resolution video frame
 
 4. FFmpeg pipeline:
    avformat_open_input
@@ -176,8 +217,8 @@ Requirements:
    avcodec_open2
    seek to timestamp
    decode frames
-   swscale if required
-   encode thumbnail
+   swscale directly to the requested output dimensions
+   create a small Android Bitmap
 
 5. Handle:
    - invalid URL
@@ -193,6 +234,10 @@ Requirements:
 7. Keep the public API small.
 
 8. Add unit/integration tests where practical.
+
+9. Reuse the FFmpeg libraries already bundled with the project.
+
+10. Do not add libwebp or another image/video dependency.
 
 Do not modify the media browser UI yet.
 
@@ -225,7 +270,9 @@ extractFrame(
 得到：
 
 ```text
-thumbnail.webp
+小尺寸 Bitmap
+       ↓
+thumbnail.jpg（测试或缓存）
 ```
 
 然后 AI 做一个 debug/test 页面或者测试入口。
@@ -366,9 +413,10 @@ Responsibilities:
 6. Deduplicate concurrent requests for the same video.
 7. Support cancellation.
 8. Limit concurrent FFmpeg extraction jobs.
-9. Store thumbnails as WebP.
+9. Store disk thumbnails as JPEG using Android Bitmap.compress.
 10. Store thumbnails at approximately 320-640px wide.
 11. Do not retain large video frames in memory.
+12. Do not add a new image loading framework.
 
 Thumbnail cache key must include enough information to invalidate the thumbnail when the media changes.
 
@@ -526,7 +574,7 @@ Requirements:
 4. Deduplicate requests for identical cache keys.
 5. Memory cache should be bounded.
 6. Disk cache should have a maximum size.
-7. Use WebP thumbnails.
+7. Use JPEG thumbnails encoded by Android.
 8. Avoid decoding thumbnails at unnecessarily high resolution.
 9. Avoid loading all thumbnails into memory.
 10. Scrolling must remain responsive.
@@ -559,7 +607,10 @@ dufs /.thumbnails/
 FFmpeg
       │
       ▼
-WebP
+小尺寸 Bitmap
+      │
+      ▼
+JPEG
       │
       ├── local cache
       │
@@ -579,13 +630,13 @@ WebP
     Interstellar.mkv
 
 /.thumbnails/
-    <hash>.webp
+    <hash>.jpg
 ```
 
 不要使用：
 
 ```text
-Interstellar.webp
+Interstellar.jpg
 ```
 
 避免重名、移动文件后失效等问题。
@@ -601,11 +652,12 @@ Requirements:
 2. Do not modify the original media file.
 3. Use a deterministic thumbnail cache key.
 4. Prefer:
-   /.thumbnails/<hash>.webp
+   /.thumbnails/<hash>.jpg
 
 5. Read remote thumbnail before generating locally.
 6. On remote miss:
    - generate thumbnail using FFmpeg
+   - encode the final-size Bitmap as JPEG on Android
    - save local cache
    - optionally upload thumbnail to dufs
 
