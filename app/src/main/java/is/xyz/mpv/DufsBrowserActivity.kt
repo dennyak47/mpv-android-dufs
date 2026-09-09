@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import `is`.xyz.mpv.databinding.ActivityDufsBrowserBinding
 import `is`.xyz.mpv.databinding.DufsBrowserItemBinding
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 
@@ -29,6 +30,7 @@ class DufsBrowserActivity : AppCompatActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private var loadTask: Future<*>? = null
     private val servers = mutableListOf<String>()
+    private var lastPlayed: LastPlayed? = null
 
     private var rootUrl: String? = null
     private var directoryUrl: String? = null
@@ -136,12 +138,27 @@ class DufsBrowserActivity : AppCompatActivity() {
         supportActionBar?.setTitle(R.string.dufs_servers_title)
         binding.path.isVisible = false
         binding.progress.isVisible = false
-        binding.list.isVisible = servers.isNotEmpty()
-        binding.empty.isVisible = servers.isEmpty()
+        val recentRow = lastPlayed?.let {
+            Row(
+                getString(R.string.dufs_continue_playing, it.label),
+                it.fileUrl,
+                false,
+                false,
+                it.size,
+                it.modifiedTime,
+                it.isVideo,
+                true,
+            )
+        }
+        val rows = listOfNotNull(recentRow) + servers.map {
+            Row(it, it, false, true)
+        }
+        binding.list.isVisible = rows.isNotEmpty()
+        binding.empty.isVisible = rows.isEmpty()
         binding.empty.setText(R.string.dufs_no_servers)
         binding.addServerBtn.isVisible = true
         binding.upBtn.isVisible = false
-        adapter.submit(servers.map { Row(it, it, false, true) })
+        adapter.submit(rows)
     }
 
     private fun showAddServerDialog() {
@@ -170,6 +187,10 @@ class DufsBrowserActivity : AppCompatActivity() {
             .setMessage(url)
             .setPositiveButton(R.string.dufs_remove) { _, _ ->
                 servers.remove(url)
+                if (lastPlayed?.rootUrl == url) {
+                    lastPlayed = null
+                    saveLastPlayed()
+                }
                 saveServers()
                 showServerList()
             }
@@ -179,17 +200,27 @@ class DufsBrowserActivity : AppCompatActivity() {
 
     private fun onRowClicked(row: Row) {
         when {
+            row.isRecent -> resumeLastPlayed()
             row.isServer -> loadDirectory(row.url, row.url, emptyList())
             row.isDirectory -> {
                 val root = rootUrl ?: return
                 val current = directoryUrl ?: return
                 loadDirectory(root, row.url, parentUrls + current)
             }
-            else -> playFile(row.url)
+            else -> {
+                if (row.isVideo)
+                    rememberLastPlayed(row)
+                playFile(row.url)
+            }
         }
     }
 
-    private fun loadDirectory(root: String, directory: String, parents: List<String>) {
+    private fun loadDirectory(
+        root: String,
+        directory: String,
+        parents: List<String>,
+        onLoaded: (() -> Unit)? = null,
+    ) {
         loadTask?.cancel(true)
         rootUrl = root
         directoryUrl = directory
@@ -224,6 +255,7 @@ class DufsBrowserActivity : AppCompatActivity() {
                             it.isVideo,
                         )
                     })
+                    onLoaded?.invoke()
                 }
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -265,6 +297,33 @@ class DufsBrowserActivity : AppCompatActivity() {
         startActivity(Intent(this, MPVActivity::class.java).putExtra("filepath", url))
     }
 
+    private fun rememberLastPlayed(row: Row) {
+        val root = rootUrl ?: return
+        val directory = directoryUrl ?: return
+        lastPlayed = LastPlayed(
+            label = row.label,
+            fileUrl = row.url,
+            rootUrl = root,
+            directoryUrl = directory,
+            parentUrls = parentUrls,
+            size = row.size,
+            modifiedTime = row.modifiedTime,
+            isVideo = row.isVideo,
+        )
+        saveLastPlayed()
+    }
+
+    private fun resumeLastPlayed() {
+        val recent = lastPlayed ?: return
+        loadDirectory(
+            recent.rootUrl,
+            recent.directoryUrl,
+            recent.parentUrls,
+        ) {
+            playFile(recent.fileUrl)
+        }
+    }
+
     private fun loadServers() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val serialized = prefs.getString(PREF_SERVERS, null)
@@ -285,6 +344,27 @@ class DufsBrowserActivity : AppCompatActivity() {
             prefs.edit().remove(PREF_PREVIOUS_URL).apply()
             saveServers()
         }
+
+        prefs.getString(PREF_LAST_PLAYED, null)?.let { serialized ->
+            try {
+                val value = JSONObject(serialized)
+                lastPlayed = LastPlayed(
+                    label = value.getString("label"),
+                    fileUrl = value.getString("fileUrl"),
+                    rootUrl = value.getString("rootUrl"),
+                    directoryUrl = value.getString("directoryUrl"),
+                    parentUrls = value.getJSONArray("parentUrls").let { parents ->
+                        List(parents.length()) { parents.getString(it) }
+                    },
+                    size = value.optLong("size", -1L),
+                    modifiedTime = value.optLong("modifiedTime", -1L),
+                    isVideo = value.optBoolean("isVideo", true),
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read last played Dufs file", e)
+                prefs.edit().remove(PREF_LAST_PLAYED).apply()
+            }
+        }
     }
 
     private fun saveServers() {
@@ -292,6 +372,29 @@ class DufsBrowserActivity : AppCompatActivity() {
             .edit()
             .putString(PREF_SERVERS, JSONArray(servers).toString())
             .apply()
+    }
+
+    private fun saveLastPlayed() {
+        val editor = PreferenceManager.getDefaultSharedPreferences(this).edit()
+        val recent = lastPlayed
+        if (recent == null) {
+            editor.remove(PREF_LAST_PLAYED)
+        } else {
+            editor.putString(
+                PREF_LAST_PLAYED,
+                JSONObject()
+                    .put("label", recent.label)
+                    .put("fileUrl", recent.fileUrl)
+                    .put("rootUrl", recent.rootUrl)
+                    .put("directoryUrl", recent.directoryUrl)
+                    .put("parentUrls", JSONArray(recent.parentUrls))
+                    .put("size", recent.size)
+                    .put("modifiedTime", recent.modifiedTime)
+                    .put("isVideo", recent.isVideo)
+                    .toString(),
+            )
+        }
+        editor.apply()
     }
 
     override fun onDestroy() {
@@ -312,6 +415,18 @@ class DufsBrowserActivity : AppCompatActivity() {
         val size: Long = -1L,
         val modifiedTime: Long = -1L,
         val isVideo: Boolean = false,
+        val isRecent: Boolean = false,
+    )
+
+    private data class LastPlayed(
+        val label: String,
+        val fileUrl: String,
+        val rootUrl: String,
+        val directoryUrl: String,
+        val parentUrls: List<String>,
+        val size: Long,
+        val modifiedTime: Long,
+        val isVideo: Boolean,
     )
 
     private class BrowserAdapter(
@@ -385,6 +500,7 @@ class DufsBrowserActivity : AppCompatActivity() {
                 boundUrl = row.url
                 binding.name.text = row.label
                 binding.icon.setImageResource(when {
+                    row.isRecent -> R.drawable.ic_play_arrow_black_24dp
                     row.isServer -> R.drawable.ic_dufs_48dp
                     row.isDirectory -> R.drawable.ic_folder_white_48dp
                     else -> R.drawable.ic_file_open_48dp
@@ -434,6 +550,7 @@ class DufsBrowserActivity : AppCompatActivity() {
         private const val TAG = "mpv"
         private const val PREF_SERVERS = "DufsBrowserActivity_servers"
         private const val PREF_PREVIOUS_URL = "MainScreenFragment_dufs_url"
+        private const val PREF_LAST_PLAYED = "DufsBrowserActivity_last_played"
         private const val STATE_ROOT_URL = "root_url"
         private const val STATE_DIRECTORY_URL = "directory_url"
         private const val STATE_PARENT_URLS = "parent_urls"

@@ -68,6 +68,7 @@
     <string name="dufs_remove">Remove</string>
     <string name="dufs_up">Up</string>
     <string name="dufs_retry">Retry</string>
+    <string name="dufs_continue_playing">Continue: %s</string>
 
     <!-- Action buttons -->
     <string name="switch_orientation">Switch orientation</string>
