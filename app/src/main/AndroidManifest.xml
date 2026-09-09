@@ -16,6 +16,7 @@
 
     <application
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:resizeableActivity="true"
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"
@@ -219,6 +220,13 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".DufsBrowserActivity"
+            android:label="@string/dufs_servers_title"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/FilePickerTheme"
+            android:exported="false" />
 
         <activity
             android:name=".FilePickerActivity"

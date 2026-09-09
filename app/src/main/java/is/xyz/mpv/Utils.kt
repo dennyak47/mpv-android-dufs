@@ -22,6 +22,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
+import androidx.annotation.StringRes
 import androidx.core.os.BundleCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -437,7 +438,12 @@ internal object Utils {
         }
     }
 
-    class OpenUrlDialog(context: Context) {
+    class OpenUrlDialog(
+        context: Context,
+        @StringRes title: Int = R.string.action_open_url,
+        private val protocols: Set<String> = PROTOCOLS,
+        private val initialText: String = "",
+    ) {
         val builder = AlertDialog.Builder(context)
         private val editText = EditText(builder.context)
         private lateinit var dialog: AlertDialog
@@ -459,7 +465,7 @@ internal object Utils {
             }
 
             builder.apply {
-                setTitle(R.string.action_open_url)
+                setTitle(title)
                 setView(editText)
             }
         }
@@ -468,13 +474,18 @@ internal object Utils {
             val uri = Uri.parse(text)
             return uri.isHierarchical && !uri.isRelative &&
                     !(uri.host.isNullOrEmpty() && uri.path.isNullOrEmpty()) &&
-                    PROTOCOLS.contains(uri.scheme)
+                    protocols.contains(uri.scheme)
         }
 
         fun create(): AlertDialog {
             dialog = builder.create()
-            editText.post { // initial state
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+            editText.post {
+                if (initialText.isEmpty()) {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                } else {
+                    editText.setText(initialText)
+                    editText.setSelection(initialText.length)
+                }
             }
             return dialog
         }

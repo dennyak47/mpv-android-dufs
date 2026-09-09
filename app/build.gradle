@@ -41,6 +41,13 @@ android {
         buildConfig = true
     }
 
+    buildTypes {
+        debug {
+            applicationIdSuffix ".dufs"
+            versionNameSuffix "-dufs"
+        }
+    }
+
     splits {
         abi {
             enable true

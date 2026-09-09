@@ -54,6 +54,20 @@
     <string name="notice_show_media_files">Showing media files only</string>
     <string name="option_remember_choice">Remember choice on next startup</string>
     <string name="uri_invalid_protocol">Invalid protocol</string>
+    <string name="dufs_loading">Loading Dufs folder…</string>
+    <string name="dufs_empty_folder">No folders or playable media found here</string>
+    <string name="dufs_error_title">Unable to read Dufs server</string>
+    <string name="dufs_error_unknown">Unknown server error</string>
+    <string name="dufs_change_server">Change server</string>
+    <string name="dufs_parent_folder">[Parent folder]</string>
+    <string name="dufs_folder_name">[Folder] %s</string>
+    <string name="dufs_servers_title">Dufs servers</string>
+    <string name="dufs_no_servers">No Dufs servers saved</string>
+    <string name="dufs_add_server">Add server</string>
+    <string name="dufs_remove_server">Remove Dufs server?</string>
+    <string name="dufs_remove">Remove</string>
+    <string name="dufs_up">Up</string>
+    <string name="dufs_retry">Retry</string>
 
     <!-- Action buttons -->
     <string name="switch_orientation">Switch orientation</string>
@@ -68,6 +82,7 @@
     <string name="action_settings">Settings</string>
     <string name="action_playlist">Playlist</string>
     <string name="action_open_url">Open URL</string>
+    <string name="action_open_dufs">Dufs server</string>
     <string name="action_open_doc">Open document</string>
     <string name="action_open_doc_tree">Open document tree</string>
     <string name="action_pick_file">Pick file</string>
