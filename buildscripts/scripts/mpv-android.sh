@@ -15,6 +15,7 @@ else
 fi
 
 [ -n "$ANDROID_SIGNING_KEY" ] && BUNDLE=1
+keypass=${ANDROID_SIGNING_ALIAS_PASSWORD:-$ANDROID_SIGNING_KEY_PASSWORD}
 
 nativeprefix () {
 	if [ -f $BUILD/prefix/$1/lib/libmpv.so ]; then
@@ -57,14 +58,18 @@ fi
 if [ -n "$ANDROID_SIGNING_KEY" ]; then
 	cd "app/build/outputs/apk"
 	apksigner=${ANDROID_HOME}/build-tools/${v_sdk_build_tools}/apksigner
+	ks_args=(--ks "${ANDROID_SIGNING_KEY}")
+	[ -n "$ANDROID_SIGNING_ALIAS" ] && ks_args+=(--ks-key-alias "${ANDROID_SIGNING_ALIAS}")
+	[ -n "$ANDROID_SIGNING_KEY_PASSWORD" ] && ks_args+=(--ks-pass "pass:${ANDROID_SIGNING_KEY_PASSWORD}")
+	[ -n "$keypass" ] && ks_args+=(--key-pass "pass:${keypass}")
 	for v in default allstorage; do
 		pushd $v
 		# sign only the universal debug APK
-		"$apksigner" sign --ks "${ANDROID_SIGNING_KEY}" \
+		"$apksigner" sign "${ks_args[@]}" \
 			--in debug/app-$v-universal-debug.apk --out debug/app-$v-universal-debug-signed.apk
 		# but all of the release APKs
 		for apk in release/*-unsigned.apk; do
-			"$apksigner" sign --ks "${ANDROID_SIGNING_KEY}" \
+			"$apksigner" sign "${ks_args[@]}" \
 				--in $apk --out ${apk/-unsigned/-signed}
 		done
 		popd
@@ -77,7 +82,10 @@ if [ -n "$ANDROID_SIGNING_KEY" ]; then
 			exit 1
 		fi
 		pushd defaultRelease
-		jarsigner -keystore "${ANDROID_SIGNING_KEY}" -signedjar \
+		jarsigner_args=(-keystore "${ANDROID_SIGNING_KEY}")
+		[ -n "$ANDROID_SIGNING_KEY_PASSWORD" ] && jarsigner_args+=(-storepass "${ANDROID_SIGNING_KEY_PASSWORD}")
+		[ -n "$keypass" ] && jarsigner_args+=(-keypass "${keypass}")
+		jarsigner "${jarsigner_args[@]}" -signedjar \
 			app-default-release-signed.aab app-default-release.aab \
 			"${ANDROID_SIGNING_ALIAS}"
 		popd
