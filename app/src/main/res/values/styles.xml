@@ -19,6 +19,11 @@
         <item name="android:windowTranslucentNavigation">true</item>
     </style>
 
+    <style name="DufsBrowserTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
     <style name="FilePickerTheme.AlertDialog" parent="Theme.AppCompat.Dialog.Alert">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>

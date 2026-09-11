@@ -99,6 +99,10 @@ class MainScreenFragment : Fragment(R.layout.fragment_main_screen) {
                 i.putExtra("default_path", lastPath)
             filePickerLauncher.launch(i)
         }
+        binding.dufsBtn.setOnClickListener {
+            saveChoice("dufs")
+            startActivity(Intent(requireContext(), DufsBrowserActivity::class.java))
+        }
         binding.settingsBtn.setOnClickListener {
             saveChoice("") // will reset
             startActivity(Intent(context, PreferenceActivity::class.java))
@@ -189,6 +193,7 @@ class MainScreenFragment : Fragment(R.layout.fragment_main_screen) {
             }
             "url" -> binding.urlBtn.callOnClick()
             "file" -> binding.filepickerBtn.callOnClick()
+            "dufs" -> binding.dufsBtn.callOnClick()
         }
     }
 

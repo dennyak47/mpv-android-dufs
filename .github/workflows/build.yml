@@ -1,54 +1,88 @@
-name: build
+name: Build APK
 
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  linux:
+  build:
+    name: Build Android APKs
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: temurin
+          java-version: "17"
 
-      - name: Export env vars
-        run: buildscripts/include/ci.sh export >>$GITHUB_ENV
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - uses: actions/cache@v6
+      - name: Export build configuration
+        shell: bash
+        run: buildscripts/include/ci.sh export >> "$GITHUB_ENV"
+
+      - name: Restore native dependency cache
+        uses: actions/cache@v4
         with:
-          path: gh-cache/
-          key: "${{ env.CACHE_IDENTIFIER }}"
-          enableCrossOsArchive: true
+          path: gh-cache
+          key: ${{ runner.os }}-${{ env.CACHE_IDENTIFIER }}
 
-      - name: Install packages
+      - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install autoconf pkgconf libtool ninja-build python3-pip gperf nasm
-          sudo pip3 install meson
+          sudo apt-get install --yes \
+            autoconf \
+            gperf \
+            libtool \
+            meson \
+            nasm \
+            ninja-build \
+            pkgconf
 
-      - name: Download or build deps
+      - name: Prepare Android SDK and native dependencies
+        env:
+          CACHE_MODE: folder
+          CACHE_FOLDER: ${{ github.workspace }}/gh-cache
         run: |
           mkdir -p "$CACHE_FOLDER"
           buildscripts/include/ci.sh install
-        env:
-          CACHE_MODE: "folder"
-          CACHE_FOLDER: "${{ github.workspace }}/gh-cache"
 
-      - name: Build
-        run: |
-          buildscripts/include/ci.sh build
+      - name: Build APKs
+        run: buildscripts/include/ci.sh build
 
-      - uses: actions/upload-artifact@v7
+      - name: Upload universal APKs
+        uses: actions/upload-artifact@v4
         with:
-          name: mpv-android-armeabi-v7a
-          path: app/build/outputs/apk/default/debug/app-default-armeabi-v7a-debug.apk
-          archive: false
+          name: mpv-dufs-universal-debug
+          path: app/build/outputs/apk/*/debug/*-universal-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
 
-      - uses: actions/upload-artifact@v7
+      - name: Upload ABI APKs
+        uses: actions/upload-artifact@v4
         with:
-          name: mpv-android-arm64-v8a
-          path: app/build/outputs/apk/default/debug/app-default-arm64-v8a-debug.apk
-          archive: false
+          name: mpv-dufs-abi-debug
+          path: |
+            app/build/outputs/apk/*/debug/*-armeabi-v7a-debug.apk
+            app/build/outputs/apk/*/debug/*-arm64-v8a-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

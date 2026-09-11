@@ -171,6 +171,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var noUIPauseMode = ""
 
     private var shouldSavePosition = false
+    private var forceSavePositionOnExit = false
 
     private var autoRotationMode = ""
 
@@ -376,13 +377,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         super.onDestroy()
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         Log.v(TAG, "onNewIntent($intent)")
         super.onNewIntent(intent)
 
         // Happens when mpv is still running (not necessarily playing) and the user selects a new
         // file to be played from another app
-        val filepath = intent?.let { parsePathFromIntent(it) }
+        val filepath = parsePathFromIntent(intent)
         if (filepath == null) {
             return
         }
@@ -569,7 +570,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun savePosition() {
-        if (!shouldSavePosition)
+        if (!shouldSavePosition && !forceSavePositionOnExit)
             return
         if (MPVLib.getPropertyBoolean("eof-reached") ?: true) {
             Log.d(TAG, "player indicates EOF, not saving watch-later config")
@@ -969,6 +970,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         val notYetPlayed = psc.playlistCount - psc.playlistPos - 1
         if (notYetPlayed <= 0 || !playlistExitWarning) {
+            forceSavePositionOnExit = true
             finishWithResult(RESULT_OK, true)
             return
         }
@@ -978,6 +980,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             setMessage(getString(R.string.exit_warning_playlist, notYetPlayed))
             setPositiveButton(R.string.dialog_yes) { dialog, _ ->
                 dialog.dismiss()
+                forceSavePositionOnExit = true
                 finishWithResult(RESULT_OK, true)
             }
             setNegativeButton(R.string.dialog_no) { dialog, _ ->
