@@ -31,6 +31,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -51,10 +56,14 @@ jobs:
             autoconf \
             gperf \
             libtool \
-            meson \
             nasm \
             ninja-build \
             pkgconf
+
+      - name: Install current Meson
+        run: |
+          python -m pip install --upgrade "meson>=1.11.0,<2"
+          meson --version
 
       - name: Prepare Android SDK and native dependencies
         env:
