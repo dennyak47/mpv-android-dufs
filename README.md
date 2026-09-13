@@ -14,7 +14,6 @@
 - Remember the most recently played DUFS video for quick access
 - Save the playback position when leaving the player and restore it later
 - Use a Material 3 DUFS browser interface with light and dark themes
-- Build and verify signed production APKs and AABs with GitHub Actions
 
 ## Downloads
 
@@ -29,8 +28,3 @@ workflow and download these artifacts:
 - `mpv-dufs-universal-release`: Universal release APK
 - `mpv-dufs-abi-release`: ARM-specific release APKs
 - `mpv-dufs-release-aab`: Release AABs for app distribution
-
-## Production builds
-
-The `Build Production` workflow is started manually. It builds and verifies
-signed release APKs and AABs without producing debug packages.
