@@ -1,52 +1,36 @@
-# mpv for Android
+# mpv-android-dufs
 
 [![Build Production](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml/badge.svg)](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml)
 
-mpv-android is a video player for Android based on [libmpv](https://github.com/mpv-player/mpv).
-
 ## Features
 
-* Hardware and software video decoding
-* Gesture-based seeking, volume/brightness control and more
-* libass support for styled subtitles
-* Secondary (or dual) subtitle support
-* High-quality rendering with advanced settings (scalers, debanding, interpolation, ...)
-* Play network streams with the "Open URL" function
-* Background playback, Picture-in-Picture, keyboard input supported
-
-### Library?
-
-mpv-android is **not** a library/module (AAR) you can import into your app.
-
-If you'd like to use libmpv in your app you can use our code as inspiration.
-The important parts are [`MPVLib`](app/src/main/java/is/xyz/mpv/MPVLib.kt), [`BaseMPVView`](app/src/main/java/is/xyz/mpv/BaseMPVView.kt) and the [native code](app/src/main/jni/).
-Native code is built by [these scripts](buildscripts/).
+- Browse media files from HTTP or HTTPS DUFS servers directly in the app
+- Add, save, switch between, and remove multiple DUFS servers
+- Navigate nested directories with back, refresh, and retry actions
+- Filter directory entries to show folders and supported media files
+- Distinguish between folders, videos, audio files, and other playable media
+- Generate thumbnails for remote videos with FFmpeg
+- Cache thumbnails in memory and on disk to reduce repeated remote reads
+- Remember the most recently played DUFS video for quick access
+- Save the playback position when leaving the player and restore it later
+- Use a Material 3 DUFS browser interface with light and dark themes
+- Build and verify signed production APKs and AABs with GitHub Actions
 
 ## Downloads
 
-You can download mpv-android from the [Releases section](https://github.com/mpv-android/mpv-android/releases) or
+Published builds are available from this repository's
+[Releases](https://github.com/dennyak47/mpv-android-dufs/releases)
+page.
 
-[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=is.xyz.mpv)
+Maintainers can also run the
+[`Build Production`](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml)
+workflow and download these artifacts:
 
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">](https://f-droid.org/packages/is.xyz.mpv)
-
-**Note**: Android TV is supported, but only available on F-Droid or by installing the APK manually.
-
-## Building from source
-
-Take a look at the [README](buildscripts/README.md) inside the `buildscripts` directory.
-
-Some other documentation can be found at this [link](http://mpv-android.github.io/mpv-android/).
+- `mpv-dufs-universal-release`: Universal release APK
+- `mpv-dufs-abi-release`: ARM-specific release APKs
+- `mpv-dufs-release-aab`: Release AABs for app distribution
 
 ## Production builds
 
-The `Build Production` GitHub Actions workflow is started manually and produces
-signed release APKs and AABs. Configure a GitHub Actions environment named
-`production` with these secrets:
-
-* `ANDROID_KEYSTORE_BASE64`: Base64-encoded Android keystore file
-* `ANDROID_KEYSTORE_PASSWORD`: Keystore password
-* `ANDROID_KEY_ALIAS`: Signing key alias
-* `ANDROID_KEY_PASSWORD`: Signing key password
-
-Never commit the keystore or its passwords to the repository.
+The `Build Production` workflow is started manually. It builds and verifies
+signed release APKs and AABs without producing debug packages.
