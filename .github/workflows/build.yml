@@ -1,25 +1,21 @@
-name: Build APK
+name: Build Production
 
 on:
-  push:
-    branches:
-      - master
-      - main
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: apk-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
-    name: Build Android APKs
+    name: Build signed release
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    environment: production
 
     steps:
       - name: Check out source
@@ -73,25 +69,82 @@ jobs:
           mkdir -p "$CACHE_FOLDER"
           buildscripts/include/ci.sh install
 
-      - name: Build APKs
+      - name: Prepare release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing production secret: $name"
+              exit 1
+            fi
+          done
+
+          keystore_path="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+
+          {
+            echo "ANDROID_KEYSTORE_PATH=$keystore_path"
+            echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build signed release APKs and bundles
+        env:
+          BUNDLE: "1"
+          DONT_BUILD_DEBUG: "1"
         run: buildscripts/include/ci.sh build
 
-      - name: Upload universal APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: mpv-dufs-universal-debug
-          path: app/build/outputs/apk/*/debug/*-universal-debug.apk
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
+      - name: Verify release signatures
+        shell: bash
+        run: |
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          if [ -z "$apksigner" ]; then
+            echo "::error::apksigner was not found"
+            exit 1
+          fi
+          while IFS= read -r -d '' apk; do
+            "$apksigner" verify --verbose "$apk"
+          done < <(find app/build/outputs/apk -path '*/release/*.apk' -print0)
+          jarsigner -verify app/build/outputs/bundle/defaultRelease/*.aab
+          jarsigner -verify app/build/outputs/bundle/allstorageRelease/*.aab
 
-      - name: Upload ABI APKs
+      - name: Upload universal release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: mpv-dufs-abi-debug
-          path: |
-            app/build/outputs/apk/*/debug/*-armeabi-v7a-debug.apk
-            app/build/outputs/apk/*/debug/*-arm64-v8a-debug.apk
+          name: mpv-dufs-universal-release
+          path: app/build/outputs/apk/*/release/*-universal-release.apk
           if-no-files-found: error
           compression-level: 0
-          retention-days: 14
+          retention-days: 30
+
+      - name: Upload ABI release APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpv-dufs-abi-release
+          path: |
+            app/build/outputs/apk/*/release/*-armeabi-v7a-release.apk
+            app/build/outputs/apk/*/release/*-arm64-v8a-release.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload release bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpv-dufs-release-aab
+          path: app/build/outputs/bundle/*Release/*.aab
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

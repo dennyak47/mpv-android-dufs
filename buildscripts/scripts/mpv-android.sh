@@ -46,11 +46,16 @@ printf '%s\n' \
 	"# This file is automatically written by the build scripts, and read using Gradle" \
 	"ndkVersion=$v_ndk_n" "ndkRoot=$ANDROID_NDK_ROOT" >ndk.properties
 
-targets=(assembleDebug)
+targets=()
+[ -z "$DONT_BUILD_DEBUG" ] && targets+=(assembleDebug)
 if [ -z "$DONT_BUILD_RELEASE" ]; then
 	targets+=(assembleRelease)
 	[ -n "$BUNDLE" ] && targets+=(bundleRelease)
 fi
+[ ${#targets[@]} -gt 0 ] || {
+	echo >&2 "Error: no Android build target enabled."
+	exit 1
+}
 ./gradlew "${targets[@]}"
 
 ### Signing

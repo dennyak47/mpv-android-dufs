@@ -1,6 +1,6 @@
 # mpv for Android
 
-[![Build APK](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml/badge.svg)](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml)
+[![Build Production](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml/badge.svg)](https://github.com/dennyak47/mpv-android-dufs/actions/workflows/build.yml)
 
 mpv-android is a video player for Android based on [libmpv](https://github.com/mpv-player/mpv).
 
@@ -37,3 +37,16 @@ You can download mpv-android from the [Releases section](https://github.com/mpv-
 Take a look at the [README](buildscripts/README.md) inside the `buildscripts` directory.
 
 Some other documentation can be found at this [link](http://mpv-android.github.io/mpv-android/).
+
+## Production builds
+
+The `Build Production` GitHub Actions workflow is started manually and produces
+signed release APKs and AABs. Configure a GitHub Actions environment named
+`production` with these secrets:
+
+* `ANDROID_KEYSTORE_BASE64`: Base64-encoded Android keystore file
+* `ANDROID_KEYSTORE_PASSWORD`: Keystore password
+* `ANDROID_KEY_ALIAS`: Signing key alias
+* `ANDROID_KEY_PASSWORD`: Signing key password
+
+Never commit the keystore or its passwords to the repository.
